@@ -23,6 +23,7 @@ Contributors:
 #include <netdb.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <execinfo.h>
 #else
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -669,6 +670,9 @@ ssize_t _mosquitto_net_read(struct mosquitto *mosq, void *buf, size_t count)
 #ifdef WITH_TLS
 	if(mosq->ssl){
 		ret = SSL_read(mosq->ssl, buf, count);
+		_mosquitto_log_printf(mosq, MOSQ_LOG_INFO, "_mosquitto_net_read: id=%s, username=%s, state=%d, keepalive=%u, last_mid=%u",
+			mosq->id, mosq->username, mosq->state, mosq->keepalive, mosq->last_mid);
+
 		if(ret <= 0){
 			err = SSL_get_error(mosq->ssl, ret);
 			if(err == SSL_ERROR_WANT_READ){
@@ -679,9 +683,26 @@ ssize_t _mosquitto_net_read(struct mosquitto *mosq, void *buf, size_t count)
 				mosq->want_write = true;
 				errno = EAGAIN;
 			}else{
+				/* Get a stack trace */
+		        int j;
+				int nptrs;
+			    void *buffer[256];
+			    char **strings;
+		        nptrs = backtrace(buffer, 256);
+		        _mosquitto_log_printf(mosq, MOSQ_LOG_INFO, "backtrace() returned %d addresses", nptrs);
+		        strings = backtrace_symbols(buffer, nptrs);
+		        if (strings == NULL) {
+		            _mosquitto_log_printf(mosq, MOSQ_LOG_INFO, "error getting backtrace symbols");
+		        } else {
+		        	for (j = 0; j < nptrs; j++) {
+		       	    	_mosquitto_log_printf(mosq, MOSQ_LOG_INFO, "%s", strings[j]);
+		        	}
+		        	free(strings);
+		        }
+
 				e = ERR_get_error();
 				while(e){
-					_mosquitto_log_printf(mosq, MOSQ_LOG_ERR, "OpenSSL Error: %s", ERR_error_string(e, ebuf));
+					_mosquitto_log_printf(mosq, MOSQ_LOG_ERR, "OpenSSL Error in read: %d, %s", e, ERR_error_string(e, ebuf));
 					e = ERR_get_error();
 				}
 				errno = EPROTO;
@@ -717,6 +738,7 @@ ssize_t _mosquitto_net_write(struct mosquitto *mosq, void *buf, size_t count)
 	errno = 0;
 #ifdef WITH_TLS
 	if(mosq->ssl){
+		_mosquitto_log_printf(mosq, MOSQ_LOG_INFO, "_mosquitto_net_write");
 		mosq->want_write = false;
 		ret = SSL_write(mosq->ssl, buf, count);
 		if(ret < 0){
@@ -729,9 +751,26 @@ ssize_t _mosquitto_net_write(struct mosquitto *mosq, void *buf, size_t count)
 				mosq->want_write = true;
 				errno = EAGAIN;
 			}else{
+				/* Get a stack trace */
+		        int j;
+				int nptrs;
+			    void *buffer[256];
+			    char **strings;
+		        nptrs = backtrace(buffer, 256);
+		        _mosquitto_log_printf(mosq, MOSQ_LOG_INFO, "backtrace() returned %d addresses", nptrs);
+		        strings = backtrace_symbols(buffer, nptrs);
+		        if (strings == NULL) {
+		            _mosquitto_log_printf(mosq, MOSQ_LOG_INFO, "error getting backtrace symbols");
+		        } else {
+		        	for (j = 0; j < nptrs; j++) {
+		       	    	_mosquitto_log_printf(mosq, MOSQ_LOG_INFO, "%s", strings[j]);
+		        	}
+		        	free(strings);
+		        }
+
 				e = ERR_get_error();
 				while(e){
-					_mosquitto_log_printf(mosq, MOSQ_LOG_ERR, "OpenSSL Error: %s", ERR_error_string(e, ebuf));
+					_mosquitto_log_printf(mosq, MOSQ_LOG_ERR, "OpenSSL Error in write: %d, %s", e, ERR_error_string(e, ebuf));
 					e = ERR_get_error();
 				}
 				errno = EPROTO;
